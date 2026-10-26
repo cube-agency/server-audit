@@ -116,7 +116,7 @@ grype_output=(--output "json=$AUDIT_TEMP/grype.json")
 if [[ "$AUDIT_VERBOSE" = 1 ]]; then grype_output+=(--output table --show-suppressed); fi
 scan_status=0
 echo 'Scanning for vulnerabilities...'
-"$AUDIT_GRYPE" "dir:$snapshot" --config "$grype_config" --fail-on "$AUDIT_FAIL_ON" \
+"$AUDIT_GRYPE" "dir:$snapshot" --name "$AUDIT_HOST" --config "$grype_config" --fail-on "$AUDIT_FAIL_ON" \
     "${grype_output[@]}" || scan_status=$?
 case "$scan_status" in
     0|2) ;;

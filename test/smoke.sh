@@ -36,7 +36,7 @@ cat > "$TEST_DIR/bin/grype" <<'SH'
 set -eu
 if [[ "$1" = version ]]; then exit 0; fi
 echo 'Scanner progress: all findings including ignored matches'
-echo 'Scanner warning: directory name not provided' >&2
+echo 'Scanner warning: test diagnostic' >&2
 if [[ "${GRYPE_STATUS:-0}" = 1 ]]; then echo 'Scanner error: database failure' >&2; fi
 snapshot=${1#dir:}
 [[ "$snapshot" = "$TMPDIR"/server-audit.*/snapshot ]]
@@ -76,7 +76,7 @@ check_run repeated-run 0
 [[ "$(cat "$TEST_DIR/last-snapshot")" != "$first_snapshot" ]]
 grep -qx 'Total: 0 package/advisory matches. Full CVE list: --verbose.' "$TEST_DIR/repeated-run.log"
 grep -qx 'Scanner progress: all findings including ignored matches' "$TEST_DIR/repeated-run.log"
-grep -qx 'Scanner warning: directory name not provided' "$TEST_DIR/repeated-run.log"
+grep -qx 'Scanner warning: test diagnostic' "$TEST_DIR/repeated-run.log"
 grep -qx 'Reboot required: NO' "$TEST_DIR/repeated-run.log"
 grep -qx 'ignore: \[\]' "$TEST_DIR/last-config"
 printf '# Project policy\nignore: []\n' > .grype.yaml
@@ -108,7 +108,7 @@ grep -qx 'Scanner progress: all findings including ignored matches' "$TEST_DIR/v
 grep -qx 'Reboot required: YES' "$TEST_DIR/vulnerabilities.log"
 check_run verbose 2 --verbose
 grep -qx 'Full Grype CVE table' "$TEST_DIR/verbose.log"
-grep -qx 'Scanner warning: directory name not provided' "$TEST_DIR/verbose.log"
+grep -qx 'Scanner warning: test diagnostic' "$TEST_DIR/verbose.log"
 export GRYPE_STATUS=1
 check_run scanner-failure 1
 grep -qx 'Scanner error: database failure' "$TEST_DIR/scanner-failure.log"
