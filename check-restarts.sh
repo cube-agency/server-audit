@@ -5,12 +5,14 @@ LC_ALL=C
 PATH=$PATH:/usr/sbin:/sbin
 export LC_ALL PATH
 
-reboot=UNKNOWN
+reboot=NO
 running_kernel=$(uname -r)
 printf 'Running kernel: %s\n' "$running_kernel"
 if [ -e /run/reboot-required ] || [ -e /var/run/reboot-required ]; then
     reboot=YES
     echo 'Reboot-required marker is present.'
+else
+    echo 'Reboot-required marker is absent.'
 fi
 if [ -f /run/reboot-required.pkgs ]; then
     echo 'Packages requesting reboot:'
@@ -21,7 +23,6 @@ elif [ -f /var/run/reboot-required.pkgs ]; then
 fi
 
 checked=0
-unavailable='kernel or microcode status could not be determined'
 if ! command -v needrestart >/dev/null 2>&1; then
     unavailable='needrestart is not installed'
 elif [ "$(id -u)" = 0 ]; then
@@ -44,9 +45,8 @@ if [ "$checked" = 1 ]; then
     case "$microcode" in ''|0|1|2) ;; *) echo 'Invalid needrestart microcode status' >&2; exit 1 ;; esac
     if [ "$kernel" = 2 ] || [ "$kernel" = 3 ] || [ "$microcode" = 2 ]; then
         reboot=YES
-    elif [ "$reboot" != YES ] && [ "$kernel" = 1 ] && [ "$microcode" = 1 ]; then
-        reboot=NO
     fi
+elif [ "${2:-0}" = 1 ]; then
+    printf 'Additional needrestart checks skipped: %s\n' "$unavailable"
 fi
-if [ "$reboot" = UNKNOWN ]; then printf 'Reboot required: UNKNOWN (%s)\n' "$unavailable";
-else printf 'Reboot required: %s\n' "$reboot"; fi
+printf 'Reboot required: %s\n' "$reboot"

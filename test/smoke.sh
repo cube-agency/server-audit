@@ -28,7 +28,7 @@ if [[ "${*: -1}" = 'tar -chf - -C / etc/os-release var/lib/dpkg/status' ]]; then
 else
     cat >/dev/null
     echo 'Running kernel: 7.0.0-38-generic'
-    echo "Reboot required: ${REBOOT:-UNKNOWN}"
+    echo "Reboot required: ${REBOOT:-NO}"
 fi
 SH
 cat > "$TEST_DIR/bin/grype" <<'SH'
@@ -77,7 +77,7 @@ check_run repeated-run 0
 grep -qx 'Total: 0 package/advisory matches. Full CVE list: --verbose.' "$TEST_DIR/repeated-run.log"
 grep -qx 'Scanner progress: all findings including ignored matches' "$TEST_DIR/repeated-run.log"
 grep -qx 'Scanner warning: directory name not provided' "$TEST_DIR/repeated-run.log"
-grep -qx 'Reboot required: UNKNOWN' "$TEST_DIR/repeated-run.log"
+grep -qx 'Reboot required: NO' "$TEST_DIR/repeated-run.log"
 grep -qx 'ignore: \[\]' "$TEST_DIR/last-config"
 printf '# Project policy\nignore: []\n' > .grype.yaml
 check_run project-config 0
@@ -124,31 +124,77 @@ sed 's/install ok installed/install ok unpacked/' "$PACKAGE_DIR/test/fixtures/st
 tar -cf "$TEST_DIR/inventory.tar" -C "$TEST_DIR/source" etc/os-release var/lib/dpkg/status
 check_run incomplete-dpkg 1
 
-# Exercise the actual remote restart script with controlled needrestart output.
+# Isolate reboot markers from the test host's /run and /var/run.
+sed -e "s|/var/run/reboot-required|$TEST_DIR/legacy-marker|g" \
+    -e "s|/run/reboot-required|$TEST_DIR/current-marker|g" \
+    "$PACKAGE_DIR/check-restarts.sh" > "$TEST_DIR/check-restarts.sh"
 cat > "$TEST_DIR/bin/id" <<'SH'
 #!/bin/sh
-echo 0
+echo "${REMOTE_UID:-0}"
 SH
 cat > "$TEST_DIR/bin/needrestart" <<'SH'
 #!/bin/sh
 set -eu
+echo needrestart >> "$TEST_DIR/privileged-calls"
+[ "${REMOTE_UID:-0}" = 0 ]
 [ "$*" = '-b -r l' ]
 if [ "${NEEDRESTART_FAILURE:-0}" = 1 ]; then exit 1; fi
 printf 'NEEDRESTART-VER: 3.6\nNEEDRESTART-KSTA: %s\nNEEDRESTART-UCSTA: %s\nNEEDRESTART-SVC: nginx.service\n' "$KERNEL_STATUS" "$MICROCODE_STATUS"
 SH
-chmod +x "$TEST_DIR/bin/id" "$TEST_DIR/bin/needrestart"
+cat > "$TEST_DIR/bin/sudo" <<'SH'
+#!/bin/sh
+set -eu
+echo sudo >> "$TEST_DIR/privileged-calls"
+[ "$*" = '-n needrestart -b -r l' ]
+shift
+REMOTE_UID=0 exec "$@"
+SH
+chmod +x "$TEST_DIR/bin/id" "$TEST_DIR/bin/needrestart" "$TEST_DIR/bin/sudo"
+
+export REMOTE_UID=1000 KERNEL_STATUS=1 MICROCODE_STATUS=1
+sh "$TEST_DIR/check-restarts.sh" > "$TEST_DIR/restarts.txt"
+grep -qx 'Reboot required: NO' "$TEST_DIR/restarts.txt"
+grep -qx 'Reboot-required marker is absent.' "$TEST_DIR/restarts.txt"
+if grep -Eq 'UNKNOWN|sudo' "$TEST_DIR/restarts.txt"; then exit 1; fi
+sh "$TEST_DIR/check-restarts.sh" 0 1 > "$TEST_DIR/restarts-verbose.txt"
+grep -qx 'Reboot required: NO' "$TEST_DIR/restarts-verbose.txt"
+grep -q '^Additional needrestart checks skipped:' "$TEST_DIR/restarts-verbose.txt"
+for marker in current-marker legacy-marker; do
+    touch "$TEST_DIR/$marker"
+    printf 'linux-image-7.0.0-38-generic\nlinux-base\n' > "$TEST_DIR/$marker.pkgs"
+    sh "$TEST_DIR/check-restarts.sh" > "$TEST_DIR/restarts.txt"
+    grep -qx 'Reboot required: YES' "$TEST_DIR/restarts.txt"
+    grep -qx 'Packages requesting reboot:' "$TEST_DIR/restarts.txt"
+    grep -qx 'linux-image-7.0.0-38-generic' "$TEST_DIR/restarts.txt"
+    grep -qx 'linux-base' "$TEST_DIR/restarts.txt"
+    rm "$TEST_DIR/$marker" "$TEST_DIR/$marker.pkgs"
+done
+[[ ! -e "$TEST_DIR/privileged-calls" ]]
+echo 'PASS unprivileged reboot markers present/absent; no sudo or needrestart calls'
+
+export KERNEL_STATUS=3
+sh "$TEST_DIR/check-restarts.sh" 1 | grep -qx 'Reboot required: YES'
+grep -qx sudo "$TEST_DIR/privileged-calls"
+grep -qx needrestart "$TEST_DIR/privileged-calls"
+unset REMOTE_UID
+
+# Exercise the optional checks with controlled needrestart output.
 export KERNEL_STATUS=3 MICROCODE_STATUS=1
-sh "$PACKAGE_DIR/check-restarts.sh" > "$TEST_DIR/restarts.txt"
+sh "$TEST_DIR/check-restarts.sh" > "$TEST_DIR/restarts.txt"
 grep -qx 'Reboot required: YES' "$TEST_DIR/restarts.txt"
 grep -qx 'Restart service: nginx.service' "$TEST_DIR/restarts.txt"
-sh "$PACKAGE_DIR/check-restarts.sh" 0 1 > "$TEST_DIR/restarts-verbose.txt"
+sh "$TEST_DIR/check-restarts.sh" 0 1 > "$TEST_DIR/restarts-verbose.txt"
 grep -qx 'NEEDRESTART-SVC: nginx.service' "$TEST_DIR/restarts-verbose.txt"
 export KERNEL_STATUS=1 MICROCODE_STATUS=2
-sh "$PACKAGE_DIR/check-restarts.sh" | grep -qx 'Reboot required: YES'
+sh "$TEST_DIR/check-restarts.sh" | grep -qx 'Reboot required: YES'
 export MICROCODE_STATUS=1
-sh "$PACKAGE_DIR/check-restarts.sh" | grep -qx 'Reboot required: NO'
+sh "$TEST_DIR/check-restarts.sh" | grep -qx 'Reboot required: NO'
 export KERNEL_STATUS=0
-sh "$PACKAGE_DIR/check-restarts.sh" | grep -q '^Reboot required: UNKNOWN ('
+sh "$TEST_DIR/check-restarts.sh" | grep -qx 'Reboot required: NO'
+touch "$TEST_DIR/current-marker"
+sh "$TEST_DIR/check-restarts.sh" | grep -qx 'Reboot required: YES'
+export KERNEL_STATUS=1
+sh "$TEST_DIR/check-restarts.sh" | grep -qx 'Reboot required: YES'
 export NEEDRESTART_FAILURE=1
-if sh "$PACKAGE_DIR/check-restarts.sh" >/dev/null; then echo 'needrestart failure was swallowed' >&2; exit 1; fi
-echo 'PASS kernel, microcode, service and unknown restart checks; failures propagate'
+if sh "$TEST_DIR/check-restarts.sh" >/dev/null; then echo 'needrestart failure was swallowed' >&2; exit 1; fi
+echo 'PASS optional sudo, kernel, microcode and service checks; markers preserved and failures propagate'

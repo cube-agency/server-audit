@@ -84,9 +84,9 @@ fix versions come from Grype; availability in the server's APT repositories is
 not checked. The summary does not confirm exploitability or validate third-party
 packages against their vendors' advisories.
 
-Restart output includes the running kernel, reboot marker/packages, services
-needing restart, and `Reboot required: YES/NO/UNKNOWN`. `--verbose` includes the
-raw needrestart evidence.
+Restart output includes the running kernel, reboot marker/packages,
+`Reboot required: YES/NO`, and services needing restart when `needrestart` can
+run. `--verbose` includes the raw needrestart evidence or why it was skipped.
 
 Collected metadata, Grype JSON and restart data use a fresh temporary directory for each
 run, automatically removed on completion or failure. Repeated runs need no
@@ -96,17 +96,22 @@ in the project.
 The temporary dpkg snapshot preserves architectures, epochs and source-package
 versions. Removed packages are omitted; incomplete dpkg transactions fail the audit.
 
-`needrestart` needs root visibility. For another account, `--needrestart-sudo`
-uses `sudo -n needrestart -b -r l` if already permitted. Missing tools/privileges
-are reported; an attempted command that fails stops the audit. Marker absence
-alone is insufficient: `NO` requires current kernel and microcode checks;
-otherwise the result is `UNKNOWN`. No services are restarted.
+Reboot markers (`/run/reboot-required`, with `/var/run/reboot-required` also
+checked) and their `.pkgs` lists are read without `sudo`. A marker is sufficient
+to report `Reboot required: YES`, even when `needrestart` is unavailable or the
+SSH account has no root access. `--fail-on-reboot` works with this check alone.
+Without `needrestart`, `NO` means neither reboot marker is present.
+
+The additional `needrestart` checks need root visibility. For another account,
+`--needrestart-sudo` uses `sudo -n needrestart -b -r l` if already permitted.
+These checks can also report `YES` for an outdated kernel or microcode; skipped
+or inconclusive checks leave the marker result unchanged. An attempted command
+that fails stops the audit. No services are restarted.
 
 Exit `2` means a non-ignored finding exceeded Grype's severity threshold, including
 findings without fixes or affected-version bounds. Exit `3` means a reboot
 is required and `--fail-on-reboot` was enabled; vulnerability exit `2` takes
-precedence. Other command failures remain nonzero. Unknown restart status does
-not trigger exit `3`.
+precedence. Other command failures remain nonzero.
 
 This scans installed OS packages, not application dependencies, containers or
 manually installed binaries. A removed but still running kernel is outside the
