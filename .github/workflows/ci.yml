@@ -3,20 +3,15 @@ name: CI and Docker image
 on:
   push:
     branches: ["**"]
+    tags: ["**"]
   pull_request:
-  workflow_dispatch:
-    inputs:
-      image_version:
-        description: Docker image version, independent of the npm package (for example 1.0)
-        required: true
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 env:
   IMAGE_NAME: cubesystems/server-audit
@@ -33,20 +28,23 @@ jobs:
       - name: Test
         run: bash test/smoke.sh
 
-      - name: Set image version
-        if: github.event_name == 'workflow_dispatch'
+      - name: Set image tag
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         id: version
-        env:
-          IMAGE_VERSION: ${{ inputs.image_version }}
         run: |
-          if [[ ! "$IMAGE_VERSION" =~ ^[0-9][a-zA-Z0-9_.-]{0,127}$ ]]; then
-            echo 'Expected an image version such as 1.0 or 1.0.1' >&2
-            exit 1
+          if [[ "$GITHUB_REF" == refs/heads/master ]]; then
+            version=latest
+          else
+            version="${GITHUB_REF_NAME#v}"
+            if [[ ! "$version" =~ ^[0-9][a-zA-Z0-9_.-]{0,127}$ ]]; then
+              echo 'Expected a version tag such as 1.0 or v1.0' >&2
+              exit 1
+            fi
           fi
-          printf 'image=%s:%s\n' "$IMAGE_NAME" "$IMAGE_VERSION" >> "$GITHUB_OUTPUT"
+          printf 'image=%s:%s\n' "$IMAGE_NAME" "$version" >> "$GITHUB_OUTPUT"
 
       - uses: docker/login-action@v4
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -62,7 +60,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           pull: true
-          push: ${{ github.event_name == 'workflow_dispatch' }}
+          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') }}
           tags: ${{ steps.version.outputs.image }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}

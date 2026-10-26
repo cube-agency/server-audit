@@ -1,33 +1,31 @@
 # server-audit
 
-A shell-based npm package proof of concept, following shell-deployer's pattern.
+A shell-based server audit tool distributed as a Docker image.
 `server-audit.sh` collects remote Debian/Ubuntu package metadata over SSH and runs
 Grype locally. `check-restarts.sh` checks reboot markers and runs `needrestart` in
 list-only mode. Nothing is installed, updated or restarted on the server.
 
 ## Usage
 
-Requires Bash, SSH, tar, realpath, jq and Grype locally; the server needs `sh`, tar
-and a Debian/Ubuntu dpkg database. npm distributes the scripts; there is no
-JavaScript runtime code or npm dependency. Tested with Grype 0.121.0.
+Use the image pinned by version and digest. For GitLab CI:
 
-From a checkout of this repository:
-
-```sh
-AUDIT_HOST=server.example.com AUDIT_USER=audit bash ./server-audit.sh
+```yaml
+server audit:
+  stage: test
+  image: cubesystems/server-audit:1.0@sha256:fb443c65209cb87f08824f7855c1f8cfded025384b5a60e560caea56dc3e3af2
+  before_script: []
+  script:
+    - /usr/local/bin/server-audit
 ```
 
-Once the repository is pushed to GitHub, run it from your project's directory
-so its `.grype.yaml` is used (Git is also required):
+Pass `AUDIT_HOST`, `AUDIT_USER`, `AUDIT_SSH_KNOWN_HOSTS` and
+`AUDIT_SSH_PRIVATE_KEY` through CI variables. The image includes the audit scripts,
+Grype and the required tools. Run from the application's checkout so its
+`.grype.yaml` applies. Nonzero audit exits should fail the job.
 
-```sh
-AUDIT_HOST=server.example.com AUDIT_USER=audit \
-  npx --yes --package github:cube-agency/server-audit server-audit
-```
-
-Existing SSH keys/agent and trusted host entries work normally. After npm
-publication, the intended command is
-`npx --yes --package server-audit@<version> server-audit`. This package is unpublished.
+The digest pins the scripts and installed tools; Grype still refreshes its
+vulnerability database. The remote server needs `sh`, tar and a Debian/Ubuntu
+dpkg database.
 
 ## Configuration
 
@@ -56,7 +54,7 @@ host-key verification stays enabled. Grype's `GRYPE_*` settings still apply.
 Use Grype's native `.grype.yaml` rules. Each rule can match a
 package, version, CVE or source package and records a reason. Set
 `AUDIT_GRYPE_CONFIG` to use a different file; an explicitly missing file fails.
-The npm package has no built-in exclusions.
+No built-in exclusions are applied.
 
 Ignored matches do not fail the audit. All other High/Critical matches still
 exit `2`, including findings without fixes. Ignored counts are shown in the
@@ -114,21 +112,15 @@ This scans installed OS packages, not application dependencies, containers or
 manually installed binaries. A removed but still running kernel is outside the
 package inventory; its running version and restart status are reported separately.
 
-## CI and verification
+## Development
 
-On a runner with the required shell tools, Grype, Node.js, npm and Git, pass
-`AUDIT_HOST`, `AUDIT_USER`, `AUDIT_SSH_KNOWN_HOSTS` and `AUDIT_SSH_PRIVATE_KEY`
-through CI variables, then run:
+To run from a checkout, install Bash, SSH, tar, realpath, jq and Grype locally:
 
 ```sh
-npx --yes --package github:cube-agency/server-audit server-audit
+AUDIT_HOST=server.example.com AUDIT_USER=audit bash ./server-audit.sh
 ```
 
-Run from the application's checkout so its `.grype.yaml` applies. Nonzero audit
-exits should fail the job. The GitHub command uses the repository's default branch;
-append `#<commit>` to the package source to pin a revision once one is published.
-
-Run `npm test` for shell smoke tests, or `npm pack --dry-run` to inspect the package.
+Run `bash test/smoke.sh` for shell smoke tests.
 The tests use local command doubles and never connect to a server.
 
 References: [Grype scan targets](https://oss.anchore.com/docs/guides/vulnerability/scan-targets/),
