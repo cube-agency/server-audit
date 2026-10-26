@@ -1,0 +1,16 @@
+{
+  "name": "server-audit",
+  "version": "0.0.0-poc.1",
+  "description": "Audit remote Debian and Ubuntu OS packages with local Grype and report pending restarts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cube-agency/server-audit.git"
+  },
+  "homepage": "https://github.com/cube-agency/server-audit#readme",
+  "bugs": "https://github.com/cube-agency/server-audit/issues",
+  "bin": { "server-audit": "server-audit.sh" },
+  "files": ["server-audit.sh", "check-restarts.sh", "summary.jq", "README.md"],
+  "scripts": {
+    "test": "bash test/smoke.sh"
+  }
+}

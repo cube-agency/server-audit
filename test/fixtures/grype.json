@@ -1,0 +1,34 @@
+{
+  "matches": [
+    {
+      "artifact": {"name": "coreutils", "version": "9.5"},
+      "vulnerability": {"id": "CVE-fix-medium", "namespace": "ubuntu", "severity": "Medium", "fix": {"state": "fixed", "versions": ["9.7"]}},
+      "matchDetails": [{"found": {"versionConstraint": "< 9.7"}}]
+    },
+    {
+      "artifact": {"name": "coreutils", "version": "9.5"},
+      "vulnerability": {"id": "CVE-fix-medium", "namespace": "ubuntu", "severity": "Medium", "fix": {"state": "fixed", "versions": ["9.7"]}},
+      "matchDetails": [{"found": {"versionConstraint": "< 9.7"}}]
+    },
+    {
+      "artifact": {"name": "linux-modules-7.0.0-31-generic", "version": "7.0.0-31.31"},
+      "vulnerability": {"id": "CVE-kernel-fixed", "namespace": "ubuntu", "severity": "Critical", "fix": {"state": "fixed", "versions": ["7.0.0-38.38"]}},
+      "matchDetails": [{"found": {"versionConstraint": "< 7.0.0-38.38"}}]
+    },
+    {
+      "artifact": {"name": "linux-modules-7.0.0-38-generic", "version": "7.0.0-38.38"},
+      "vulnerability": {"id": "CVE-kernel-open", "namespace": "ubuntu", "severity": "Critical", "fix": {"state": "not-fixed", "versions": []}},
+      "matchDetails": [{"found": {"versionConstraint": "none (unknown)"}}]
+    },
+    {
+      "artifact": {"name": "qemu-guest-agent", "version": "1:10.2.1"},
+      "vulnerability": {"id": "CVE-qemu-open", "namespace": "ubuntu", "severity": "High", "fix": {"state": "not-fixed", "versions": []}},
+      "matchDetails": [{"found": {"versionConstraint": "none (unknown)"}}]
+    },
+    {
+      "artifact": {"name": "zabbix-agent", "version": "1:7.4.16"},
+      "vulnerability": {"id": "CVE-zabbix-open", "namespace": "ubuntu", "severity": "Medium", "fix": {"state": "not-fixed", "versions": []}},
+      "matchDetails": [{"found": {"versionConstraint": "none (unknown)"}}]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+Package: libssl3
+Status: install ok installed
+Architecture: amd64
+Source: openssl (3.0.11-1~deb12u2)
+Version: 3.0.11-1~deb12u2+b1
+
+Package: bash
+Status: hold ok installed
+Architecture: amd64
+Source: bash (5.2.15-2)
+Version: 5.2.15-2+b2
+
+Package: removed-package
+Status: deinstall ok config-files
+Architecture: all
+Version: 1.0
