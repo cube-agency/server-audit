@@ -42,7 +42,7 @@ dpkg database.
 | `AUDIT_GRYPE_CONFIG` | `.grype.yaml` in the working directory, otherwise temporary `ignore: []`; global config files are not loaded |
 | `AUDIT_FAIL_ON` | `high` |
 | `AUDIT_NEEDRESTART_SUDO` | `0`; `--needrestart-sudo` sets it to `1` |
-| `AUDIT_FAIL_ON_REBOOT` | `0`; `--fail-on-reboot` sets it to `1` |
+| `AUDIT_FAIL_ON_REBOOT` | `1`; set to `0` to report required reboots without failing; `--fail-on-reboot` sets it to `1` |
 | `AUDIT_VERBOSE` | `0`; `--verbose` prints the full Grype CVE table, including ignored matches, and needrestart evidence |
 
 Choose one key source and one known-hosts source. Inline credentials use private
@@ -99,7 +99,7 @@ versions. Removed packages are omitted; incomplete dpkg transactions fail the au
 Reboot markers (`/run/reboot-required`, with `/var/run/reboot-required` also
 checked) and their `.pkgs` lists are read without `sudo`. A marker is sufficient
 to report `Reboot required: YES`, even when `needrestart` is unavailable or the
-SSH account has no root access. `--fail-on-reboot` works with this check alone.
+SSH account has no root access. This check alone fails the audit by default.
 Without `needrestart`, `NO` means neither reboot marker is present.
 
 The additional `needrestart` checks need root visibility. For another account,
@@ -110,8 +110,8 @@ that fails stops the audit. No services are restarted.
 
 Exit `2` means a non-ignored finding exceeded Grype's severity threshold, including
 findings without fixes or affected-version bounds. Exit `3` means a reboot
-is required and `--fail-on-reboot` was enabled; vulnerability exit `2` takes
-precedence. Other command failures remain nonzero.
+is required (enabled by default; set `AUDIT_FAIL_ON_REBOOT=0` to opt out);
+vulnerability exit `2` takes precedence. Other command failures remain nonzero.
 
 This scans installed OS packages, not application dependencies, containers or
 manually installed binaries. A removed but still running kernel is outside the

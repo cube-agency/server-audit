@@ -14,6 +14,7 @@ export TMPDIR="$TEST_DIR/tmp"
 export PATH="$TEST_DIR/bin:$PATH"
 export AUDIT_HOST=test.invalid AUDIT_USER=audit AUDIT_SSH_PRIVATE_KEY=TEST-ONLY
 export AUDIT_GRYPE=grype
+unset AUDIT_FAIL_ON_REBOOT
 printf 'ID=debian\nVERSION_ID="12"\n' > "$TEST_DIR/source/etc/os-release"
 cp "$PACKAGE_DIR/test/fixtures/status" "$TEST_DIR/source/var/lib/dpkg/status"
 tar -cf "$TEST_DIR/inventory.tar" -C "$TEST_DIR/source" etc/os-release var/lib/dpkg/status
@@ -92,9 +93,12 @@ grep -q '^Cannot read Grype config:' "$TEST_DIR/missing-config.log"
 unset AUDIT_GRYPE_CONFIG
 rm .grype.yaml
 export REBOOT=YES
-check_run reboot-policy 3 --fail-on-reboot
+check_run reboot-default 3
+AUDIT_FAIL_ON_REBOOT=0 check_run reboot-opt-out 0
+grep -qx 'Reboot required: YES' "$TEST_DIR/reboot-opt-out.log"
+AUDIT_FAIL_ON_REBOOT=0 check_run reboot-policy 3 --fail-on-reboot
 export GRYPE_STATUS=2
-check_run vulnerabilities 2 --fail-on-reboot
+check_run vulnerabilities 2
 grep -q 'coreutils 9.5: 1 advisory, highest Medium; fixed in 9.7' "$TEST_DIR/vulnerabilities.log"
 grep -Fq 'linux-modules-7.0.0-31-generic 7.0.0-31.31 [not the running kernel]' "$TEST_DIR/vulnerabilities.log"
 grep -Fq 'linux-modules-7.0.0-38-generic 7.0.0-38.38 [running kernel]' "$TEST_DIR/vulnerabilities.log"
