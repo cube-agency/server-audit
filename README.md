@@ -3,6 +3,8 @@
 Scan installed Debian/Ubuntu packages with Grype over SSH and check for required
 reboots. Read-only: nothing is installed, updated or restarted on the server.
 
+[Docker Hub](https://hub.docker.com/r/cubesystems/server-audit)
+
 ## Usage
 
 GitLab CI:
