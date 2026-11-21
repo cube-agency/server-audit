@@ -14,3 +14,83 @@ Package: removed-package
 Status: deinstall ok config-files
 Architecture: all
 Version: 1.0
+
+Package: coreutils
+Status: install ok installed
+Architecture: amd64
+Version: 9.5
+
+Package: qemu-guest-agent
+Status: install ok installed
+Architecture: amd64
+Version: 1:10.2.1
+
+Package: zabbix-agent
+Status: install ok installed
+Architecture: amd64
+Version: 1:7.4.16
+
+Package: linux-image-7.0.0-31-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-31.31
+
+Package: linux-image-unsigned-7.0.0-31-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-31.31
+
+Package: linux-modules-7.0.0-31-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-31.31
+
+Package: linux-modules-extra-7.0.0-31-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-31.31
+
+Package: linux-image-7.0.0-38-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-38.38
+
+Package: linux-image-unsigned-7.0.0-38-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-38.38
+
+Package: linux-modules-7.0.0-38-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-38.38
+
+Package: linux-modules-extra-7.0.0-38-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-38.38
+
+Package: linux-image-7.0.0-38-lowlatency
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-38.38
+
+Package: linux-image-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-38.38
+
+Package: linux-tools-7.0.0-31-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-31.31
+
+Package: linux-libc-dev
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-31.31
+
+Package: linux-modules-vendor-7.0.0-31-generic
+Status: install ok installed
+Architecture: amd64
+Version: 7.0.0-31.31

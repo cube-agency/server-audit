@@ -28,7 +28,7 @@ if [[ "${*: -1}" = 'tar -chf - -C / etc/os-release var/lib/dpkg/status' ]]; then
     cat "$TEST_DIR/inventory.tar"
 else
     cat >/dev/null
-    echo 'Running kernel: 7.0.0-38-generic'
+    printf 'Running kernel: %s\n' "${RUNNING_KERNEL-7.0.0-38-generic}"
     echo "Reboot required: ${REBOOT:-NO}"
 fi
 SH
@@ -45,19 +45,35 @@ grep -q '^Source: openssl (3.0.11-1~deb12u2)$' "$snapshot/var/lib/dpkg/status"
 grep -q '^Status: hold ok installed$' "$snapshot/var/lib/dpkg/status"
 if grep -q removed-package "$snapshot/var/lib/dpkg/status"; then exit 1; fi
 printf '%s\n' "$snapshot" > "$TEST_DIR/last-snapshot"
+cp "$snapshot/var/lib/dpkg/status" "$TEST_DIR/last-status"
+# Model package discovery and severity gating using only the supplied snapshot.
+sed -n 's/^Package: //p' "$snapshot/var/lib/dpkg/status" > "$TEST_DIR/scanned-packages"
+report="$TEST_DIR/scanner-report.json"
+if [[ "${GRYPE_BAD_JSON:-0}" = 1 ]]; then printf '{}\n' > "$report";
+elif [[ "${GRYPE_STATUS:-0}" = 2 ]]; then
+    jq --rawfile packages "$TEST_DIR/scanned-packages" --arg cve "${GRYPE_CVE:-}" '
+        .matches |= map(select(.artifact.name as $name | $packages | split("\n") | index($name))) |
+        if $cve == "" then . else .matches |= map(select(.vulnerability.id == $cve)) end
+    ' "$PACKAGE_DIR/test/fixtures/grype.json" > "$report"
+else printf '{"matches": []}\n' > "$report"; fi
 config_next=0
+threshold_next=0
+threshold=high
 for argument in "$@"; do
     if [[ "$config_next" = 1 ]]; then cp "$argument" "$TEST_DIR/last-config"; config_next=0; fi
+    if [[ "$threshold_next" = 1 ]]; then threshold=$argument; threshold_next=0; fi
     case "$argument" in
         --config) config_next=1 ;;
-        json=*)
-            if [[ "${GRYPE_BAD_JSON:-0}" = 1 ]]; then printf '{}\n' > "${argument#json=}";
-            elif [[ "${GRYPE_STATUS:-0}" = 2 ]]; then cp "$PACKAGE_DIR/test/fixtures/grype.json" "${argument#json=}";
-            else printf '{"matches": []}\n' > "${argument#json=}"; fi ;;
-        table) echo 'Full Grype CVE table' ;;
+        --fail-on) threshold_next=1 ;;
+        json=*) cp "$report" "${argument#json=}" ;;
+        table) echo 'Full Grype CVE table'; jq -r '.matches[].vulnerability.id' "$report" ;;
     esac
 done
-exit "${GRYPE_STATUS:-0}"
+if [[ "${GRYPE_STATUS:-0}" = 1 ]]; then exit 1; fi
+if [[ "${GRYPE_BAD_JSON:-0}" != 1 ]] && jq -e --arg threshold "$threshold" '
+    def rank: {unknown: 0, negligible: 1, low: 2, medium: 3, high: 4, critical: 5}[ascii_downcase];
+    any(.matches[]; (.vulnerability.severity | rank) >= ($threshold | rank))
+' "$report" >/dev/null; then exit 2; fi
 SH
 chmod +x "$TEST_DIR/bin/ssh" "$TEST_DIR/bin/grype"
 
@@ -72,6 +88,15 @@ check_run() {
     echo "PASS $name"
 }
 check_run success 0
+grep -qx 'Excluded inactive kernel packages: 5 (not running; use --verbose to list).' "$TEST_DIR/success.log"
+if grep -q '^Package: linux-image-7.0.0-38-lowlatency$' "$TEST_DIR/last-status"; then exit 1; fi
+for prefix in linux-image linux-image-unsigned linux-modules linux-modules-extra; do
+    grep -qx "Package: $prefix-7.0.0-38-generic" "$TEST_DIR/last-status"
+    if grep -qx "Package: $prefix-7.0.0-31-generic" "$TEST_DIR/last-status"; then exit 1; fi
+done
+for package in linux-image-generic linux-tools-7.0.0-31-generic linux-libc-dev linux-modules-vendor-7.0.0-31-generic; do
+    grep -qx "Package: $package" "$TEST_DIR/last-status"
+done
 first_snapshot=$(cat "$TEST_DIR/last-snapshot")
 check_run repeated-run 0
 [[ "$(cat "$TEST_DIR/last-snapshot")" != "$first_snapshot" ]]
@@ -92,6 +117,22 @@ check_run missing-config 1
 grep -q '^Cannot read Grype config:' "$TEST_DIR/missing-config.log"
 unset AUDIT_GRYPE_CONFIG
 rm .grype.yaml
+# An inactive Critical finding must neither appear nor fail, even in verbose mode.
+GRYPE_STATUS=2 GRYPE_CVE=CVE-kernel-fixed check_run inactive-kernel-only 0 --verbose
+grep -qx '  linux-modules-7.0.0-31-generic 7.0.0-31.31' "$TEST_DIR/inactive-kernel-only.log"
+if grep -Eq 'CVE-kernel-fixed|Threshold exceeded' "$TEST_DIR/inactive-kernel-only.log"; then exit 1; fi
+# Booting that exact release makes the same finding count again.
+GRYPE_STATUS=2 GRYPE_CVE=CVE-kernel-fixed RUNNING_KERNEL=7.0.0-31-generic check_run old-kernel-now-running 2
+grep -Fq 'linux-modules-7.0.0-31-generic 7.0.0-31.31 [running kernel]' "$TEST_DIR/old-kernel-now-running.log"
+GRYPE_STATUS=2 GRYPE_CVE=CVE-kernel-open check_run running-kernel-only 2
+GRYPE_STATUS=2 GRYPE_CVE=CVE-qemu-open check_run userspace-only 2
+GRYPE_STATUS=2 GRYPE_CVE=CVE-qemu-open AUDIT_FAIL_ON=critical check_run configured-threshold 0
+for invalid_kernel in '' 'two releases' $'7.0.0-38-generic\nRunning kernel: 7.0.0-31-generic'; do
+    rm -f "$TEST_DIR/last-snapshot"
+    RUNNING_KERNEL="$invalid_kernel" check_run invalid-kernel 1
+    grep -qx 'Missing or invalid running kernel release' "$TEST_DIR/invalid-kernel.log"
+    [[ ! -f "$TEST_DIR/last-snapshot" ]]
+done
 export REBOOT=YES
 check_run reboot-default 3
 AUDIT_FAIL_ON_REBOOT=0 check_run reboot-opt-out 0
@@ -100,9 +141,9 @@ AUDIT_FAIL_ON_REBOOT=0 check_run reboot-policy 3 --fail-on-reboot
 export GRYPE_STATUS=2
 check_run vulnerabilities 2
 grep -q 'coreutils 9.5: 1 advisory, highest Medium; fixed in 9.7' "$TEST_DIR/vulnerabilities.log"
-grep -Fq 'linux-modules-7.0.0-31-generic 7.0.0-31.31 [not the running kernel]' "$TEST_DIR/vulnerabilities.log"
+if grep -Fq 'linux-modules-7.0.0-31-generic' "$TEST_DIR/vulnerabilities.log"; then exit 1; fi
 grep -Fq 'linux-modules-7.0.0-38-generic 7.0.0-38.38 [running kernel]' "$TEST_DIR/vulnerabilities.log"
-grep -qx 'Published fixes (2 packages):' "$TEST_DIR/vulnerabilities.log"
+grep -qx 'Published fixes (1 packages):' "$TEST_DIR/vulnerabilities.log"
 grep -qx 'No published fix, high or higher (2 packages):' "$TEST_DIR/vulnerabilities.log"
 grep -q '1 without affected-version bounds' "$TEST_DIR/vulnerabilities.log"
 grep -qx 'Other findings without published fixes: 1.' "$TEST_DIR/vulnerabilities.log"

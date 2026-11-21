@@ -110,6 +110,39 @@ printf '%s %s: %s installed packages\n' "$os_id" "$os_version" "$(grep -c '^Pack
 ssh "${SSH_ARGS[@]}" -- "$AUDIT_HOST" sh -s -- "$AUDIT_NEEDRESTART_SUDO" "$AUDIT_VERBOSE" < "$AUDIT_DIR/check-restarts.sh" > "$AUDIT_TEMP/restarts.txt"
 cat "$AUDIT_TEMP/restarts.txt"
 running_kernel=$(sed -n 's/^Running kernel: //p' "$AUDIT_TEMP/restarts.txt")
+if [[ ! "$running_kernel" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ ]]; then
+    echo 'Missing or invalid running kernel release' >&2
+    exit 1
+fi
+
+# Scope kernel findings to the running release before Grype applies its threshold.
+# Only omit versioned images/modules; keep metapackages, tools and unknown names.
+: > "$AUDIT_TEMP/inactive-kernels.txt"
+awk -v kernel="$running_kernel" -v excluded="$AUDIT_TEMP/inactive-kernels.txt" '
+    BEGIN { RS=""; FS="\n"; ORS="\n\n" }
+    {
+        name=""; version=""
+        for (i=1; i<=NF; i++) {
+            if ($i ~ /^Package: /) name=substr($i, 10)
+            if ($i ~ /^Version: /) version=substr($i, 10)
+        }
+        if (name ~ /^linux-(image(-unsigned)?|modules(-extra)?)-[0-9]/) {
+            release=name
+            sub(/^linux-(image(-unsigned)?|modules(-extra)?)-/, "", release)
+            if (release != kernel) {
+                printf "  %s %s\n", name, version > excluded
+                next
+            }
+        }
+        print
+    }
+' "$snapshot/var/lib/dpkg/status" > "$AUDIT_TEMP/active-status"
+mv "$AUDIT_TEMP/active-status" "$snapshot/var/lib/dpkg/status"
+excluded_kernels=$(wc -l < "$AUDIT_TEMP/inactive-kernels.txt" | tr -d ' ')
+if [[ "$excluded_kernels" != 0 ]]; then
+    echo "Excluded inactive kernel packages: $excluded_kernels (not running; use --verbose to list)."
+    if [[ "$AUDIT_VERBOSE" = 1 ]]; then cat "$AUDIT_TEMP/inactive-kernels.txt"; fi
+fi
 
 # Native ignore rules apply to both the report and Grype's severity threshold.
 grype_output=(--output "json=$AUDIT_TEMP/grype.json")
